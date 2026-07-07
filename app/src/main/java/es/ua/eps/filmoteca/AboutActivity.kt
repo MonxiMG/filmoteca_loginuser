@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 
+import com.google.firebase.auth.FirebaseAuth
+
 // Enumeración para cambiar entre interfaces
 enum class Mode { Layouts, Compose }
 
@@ -81,6 +83,19 @@ class AboutActivity : AppCompatActivity() {
 
         val tvAuthor = findViewById<TextView>(R.id.tvAuthor)
         tvAuthor.text = getString(R.string.about_author, "Monse Muñoz")
+
+        // Referencia al usuario autenticado en Firebase.
+        val currentUser = FirebaseAuth.getInstance().currentUser
+
+        // Referencia al TextView de datos del usuario.
+        val tvUser = findViewById<TextView>(R.id.tvUser)
+
+        // Preparación de los datos del usuario conectado.
+        val userName = currentUser?.displayName ?: "Usuario no disponible"
+        val userEmail = currentUser?.email ?: "Email no disponible"
+
+        // Visualización del usuario conectado.
+        tvUser.text = "Usuario conectado:\n$userName\n$userEmail"
 
         findViewById<Button>(R.id.btnWeb).setOnClickListener { openWebsite() }
         findViewById<Button>(R.id.btnSupport).setOnClickListener { sendSupportEmail() }

@@ -47,6 +47,16 @@
                 android:text="@string/about_author"
                 android:textSize="20sp"
                 android:textStyle="bold"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Datos del usuario conectado con Google -->
+            <TextView
+                android:id="@+id/tvUser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Usuario conectado"
+                android:textSize="16sp"
+                android:gravity="center"
                 android:layout_marginBottom="32dp" />
 
             <!-- Botón Ir al sitio web -->
