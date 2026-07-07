@@ -1,6 +1,9 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+
+    // Plugin necesario para conectar la app con Firebase.
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -61,6 +64,11 @@ dependencies {
 
     // --- Google Sign In ---
     implementation("com.google.android.gms:play-services-auth:21.4.0")
+
+    // --- Firebase ---
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-messaging")
 
     // --- Activity (XML y Compose) ---
     // Forzamos versión 1.9.3 compatible con AGP 8.6.0
