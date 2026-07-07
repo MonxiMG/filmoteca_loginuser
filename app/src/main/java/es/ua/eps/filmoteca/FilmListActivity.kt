@@ -19,6 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.firebase.auth.FirebaseAuth
 
 class FilmListActivity : AppCompatActivity() {
 
@@ -43,39 +46,65 @@ class FilmListActivity : AppCompatActivity() {
                                     .putExtra(FilmDataActivity.EXTRA_FILM_TITLE, "Película B")
                             )
                         },
-                        onAbout = { startActivity(Intent(this, AboutActivity::class.java)) },
-                        onExit = { finishAffinity() }
+                        onAbout = {
+                            startActivity(Intent(this, AboutActivity::class.java))
+                        },
+                        onExit = {
+                            finishAffinity()
+                        }
                     )
                 }
             }
         } else {
             setContentView(R.layout.activity_film_list)
 
-            // --- Toolbar como AppBar ---
+            // Configuración de la Toolbar como AppBar.
             findViewById<MaterialToolbar?>(R.id.toolbar)?.let { tb ->
                 setSupportActionBar(tb)
 
-                // Oculta cualquier título en la AppBar
+                // Ocultación del título en la AppBar.
                 supportActionBar?.setDisplayShowTitleEnabled(false)
                 supportActionBar?.title = null
                 tb.title = ""
 
-                // Fuerza el menú en la propia Toolbar (para que siempre se vea/click)
+                // Carga del menú en la Toolbar.
                 tb.menu.clear()
                 tb.inflateMenu(R.menu.menu_film_list)
+
+                // Gestión de las opciones del menú de la Toolbar.
                 tb.setOnMenuItemClickListener { item ->
                     when (item.itemId) {
-                        R.id.action_add -> { addDefaultFilm(); true }
-                        R.id.action_about -> { startActivity(Intent(this, AboutActivity::class.java)); true }
+                        R.id.action_add -> {
+                            addDefaultFilm()
+                            true
+                        }
+
+                        R.id.action_about -> {
+                            startActivity(Intent(this, AboutActivity::class.java))
+                            true
+                        }
+
+                        R.id.action_sign_out -> {
+                            closeSession()
+                            true
+                        }
+
+                        R.id.action_disconnect -> {
+                            disconnectAccount()
+                            true
+                        }
+
                         else -> false
                     }
                 }
             }
 
+            // Configuración del listado de películas.
             val listView = findViewById<ListView>(R.id.lvFilms)
             val adapter = FilmAdapter(this, FilmDataSource.films)
             listView.adapter = adapter
 
+            // Apertura del detalle de la película seleccionada.
             listView.setOnItemClickListener { _, _, position, _ ->
                 startActivity(
                     Intent(this, FilmDataActivity::class.java)
@@ -83,6 +112,7 @@ class FilmListActivity : AppCompatActivity() {
                 )
             }
 
+            // Activación del borrado múltiple de películas.
             activarBorradoMultiple(listView, adapter)
         }
     }
@@ -94,8 +124,26 @@ class FilmListActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.action_add -> { addDefaultFilm(); true }
-            R.id.action_about -> { startActivity(Intent(this, AboutActivity::class.java)); true }
+            R.id.action_add -> {
+                addDefaultFilm()
+                true
+            }
+
+            R.id.action_about -> {
+                startActivity(Intent(this, AboutActivity::class.java))
+                true
+            }
+
+            R.id.action_sign_out -> {
+                closeSession()
+                true
+            }
+
+            R.id.action_disconnect -> {
+                disconnectAccount()
+                true
+            }
+
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -111,35 +159,136 @@ class FilmListActivity : AppCompatActivity() {
             posterRes = R.drawable.ic_launcher_foreground,
             notes = ""
         )
+
         FilmDataSource.films.add(nueva)
+
+        // Actualización del adaptador tras añadir la película.
         (findViewById<ListView>(R.id.lvFilms).adapter as? FilmAdapter)?.notifyDataSetChanged()
     }
 
     private fun activarBorradoMultiple(listView: ListView, adapter: FilmAdapter) {
         listView.choiceMode = ListView.CHOICE_MODE_MULTIPLE_MODAL
+
         listView.setMultiChoiceModeListener(object : android.widget.AbsListView.MultiChoiceModeListener {
             private val seleccionadas = mutableSetOf<Int>()
+
             override fun onCreateActionMode(mode: android.view.ActionMode, menu: Menu): Boolean {
-                mode.menuInflater.inflate(R.menu.menu_context_delete, menu); seleccionadas.clear(); return true
+                // Carga del menú contextual de borrado.
+                mode.menuInflater.inflate(R.menu.menu_context_delete, menu)
+
+                // Limpieza de selecciones anteriores.
+                seleccionadas.clear()
+
+                return true
             }
-            override fun onPrepareActionMode(mode: android.view.ActionMode, menu: Menu) = false
-            override fun onItemCheckedStateChanged(mode: android.view.ActionMode, position: Int, id: Long, checked: Boolean) {
-                if (checked) seleccionadas.add(position) else seleccionadas.remove(position)
+
+            override fun onPrepareActionMode(mode: android.view.ActionMode, menu: Menu): Boolean {
+                return false
+            }
+
+            override fun onItemCheckedStateChanged(
+                mode: android.view.ActionMode,
+                position: Int,
+                id: Long,
+                checked: Boolean
+            ) {
+                // Actualización del conjunto de películas seleccionadas.
+                if (checked) {
+                    seleccionadas.add(position)
+                } else {
+                    seleccionadas.remove(position)
+                }
+
+                // Actualización del título del modo contextual.
                 mode.title = "${seleccionadas.size} seleccionada(s)"
             }
-            override fun onActionItemClicked(mode: android.view.ActionMode, item: MenuItem): Boolean {
+
+            override fun onActionItemClicked(
+                mode: android.view.ActionMode,
+                item: MenuItem
+            ): Boolean {
                 return if (item.itemId == R.id.action_delete) {
+                    // Borrado de las películas seleccionadas desde el final para evitar errores de índice.
                     val indices = seleccionadas.toList().sortedDescending()
-                    for (i in indices) FilmDataSource.films.removeAt(i)
-                    adapter.notifyDataSetChanged(); mode.finish(); true
-                } else false
+
+                    for (i in indices) {
+                        FilmDataSource.films.removeAt(i)
+                    }
+
+                    // Actualización del listado después del borrado.
+                    adapter.notifyDataSetChanged()
+
+                    // Cierre del modo contextual.
+                    mode.finish()
+
+                    true
+                } else {
+                    false
+                }
             }
-            override fun onDestroyActionMode(mode: android.view.ActionMode) { seleccionadas.clear() }
+
+            override fun onDestroyActionMode(mode: android.view.ActionMode) {
+                // Limpieza de la selección al cerrar el modo contextual.
+                seleccionadas.clear()
+            }
         })
+    }
+
+    private fun closeSession() {
+        // Configuración del cliente de Google Sign In.
+        val googleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+
+        // Creación del cliente de Google Sign In.
+        val googleSignInClient = GoogleSignIn.getClient(this, googleSignInOptions)
+
+        // Cierre de sesión en Firebase.
+        FirebaseAuth.getInstance().signOut()
+
+        // Cierre de sesión en Google.
+        googleSignInClient.signOut().addOnCompleteListener {
+            openLoginActivity()
+        }
+    }
+
+    private fun disconnectAccount() {
+        // Configuración del cliente de Google Sign In.
+        val googleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+
+        // Creación del cliente de Google Sign In.
+        val googleSignInClient = GoogleSignIn.getClient(this, googleSignInOptions)
+
+        // Cierre de sesión en Firebase.
+        FirebaseAuth.getInstance().signOut()
+
+        // Revocación del acceso de la cuenta Google a la aplicación.
+        googleSignInClient.revokeAccess().addOnCompleteListener {
+            openLoginActivity()
+        }
+    }
+
+    private fun openLoginActivity() {
+        // Creación del intent para volver a la pantalla de login.
+        val intent = Intent(this, LoginActivity::class.java)
+
+        // Limpieza de la pila de pantallas para evitar volver atrás a la Filmoteca.
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+
+        // Apertura de la pantalla de login.
+        startActivity(intent)
+
+        // Cierre de la pantalla actual.
+        finish()
     }
 }
 
-/* ----------------- Compose UI (sin cambios) ----------------- */
+/* ----------------- Compose UI sin cambios ----------------- */
+
 @Composable
 fun FilmListScreen(
     onSeeA: () -> Unit,
@@ -147,15 +296,64 @@ fun FilmListScreen(
     onAbout: () -> Unit,
     onExit: () -> Unit
 ) {
-    val blackYellow = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.Yellow)
-    Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp)) {
-        Button(onClick = onAbout, colors = blackYellow, modifier = Modifier.align(Alignment.TopEnd)) { Text("Acerca de") }
-        Column(Modifier.align(Alignment.Center).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Listado de películas", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onSeeA, colors = blackYellow, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) { Text("Ver película A") }
-            Button(onClick = onSeeB, colors = blackYellow, modifier = Modifier.fillMaxWidth()) { Text("Ver película B") }
+    val blackYellow = ButtonDefaults.buttonColors(
+        containerColor = Color.Black,
+        contentColor = Color.Yellow
+    )
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+    ) {
+        Button(
+            onClick = onAbout,
+            colors = blackYellow,
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            Text("Acerca de")
         }
-        Button(onClick = onExit, colors = blackYellow, modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) { Text("Salir de la aplicación") }
+
+        Column(
+            Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "Listado de películas",
+                style = MaterialTheme.typography.titleLarge
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = onSeeA,
+                colors = blackYellow,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Text("Ver película A")
+            }
+
+            Button(
+                onClick = onSeeB,
+                colors = blackYellow,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Ver película B")
+            }
+        }
+
+        Button(
+            onClick = onExit,
+            colors = blackYellow,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+        ) {
+            Text("Salir de la aplicación")
+        }
     }
 }
