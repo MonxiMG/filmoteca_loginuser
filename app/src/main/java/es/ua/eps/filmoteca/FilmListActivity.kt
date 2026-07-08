@@ -2,9 +2,11 @@ package es.ua.eps.filmoteca
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.ListView
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.appbar.MaterialToolbar
@@ -22,13 +24,13 @@ import androidx.compose.ui.unit.dp
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
-import android.util.Log
-import android.widget.Toast
 import com.google.firebase.messaging.FirebaseMessaging
 
 class FilmListActivity : AppCompatActivity() {
 
     private val useCompose = false
+
+    private var filmAdapter: FilmAdapter? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,8 +108,8 @@ class FilmListActivity : AppCompatActivity() {
 
             // Configuración del listado de películas.
             val listView = findViewById<ListView>(R.id.lvFilms)
-            val adapter = FilmAdapter(this, FilmDataSource.films)
-            listView.adapter = adapter
+            filmAdapter = FilmAdapter(this, FilmDataSource.films)
+            listView.adapter = filmAdapter
 
             // Apertura del detalle de la película seleccionada.
             listView.setOnItemClickListener { _, _, position, _ ->
@@ -118,8 +120,38 @@ class FilmListActivity : AppCompatActivity() {
             }
 
             // Activación del borrado múltiple de películas.
-            activarBorradoMultiple(listView, adapter)
+            filmAdapter?.let { adapter ->
+                activarBorradoMultiple(listView, adapter)
+            }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+
+        // Registro del aviso de cambios en las películas.
+        FilmDataSource.onFilmsChanged = {
+            runOnUiThread {
+                // Actualización visual del listado.
+                filmAdapter?.notifyDataSetChanged()
+
+                Toast.makeText(
+                    this,
+                    "Listado actualizado por FCM",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        // Refresco del listado al volver a la pantalla.
+        filmAdapter?.notifyDataSetChanged()
+    }
+
+    override fun onStop() {
+        super.onStop()
+
+        // Eliminación del aviso de cambios al salir de la pantalla.
+        FilmDataSource.onFilmsChanged = null
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -165,10 +197,7 @@ class FilmListActivity : AppCompatActivity() {
             notes = ""
         )
 
-        FilmDataSource.films.add(nueva)
-
-        // Actualización del adaptador tras añadir la película.
-        (findViewById<ListView>(R.id.lvFilms).adapter as? FilmAdapter)?.notifyDataSetChanged()
+        FilmDataSource.add(nueva)
     }
 
     private fun activarBorradoMultiple(listView: ListView, adapter: FilmAdapter) {
@@ -217,7 +246,7 @@ class FilmListActivity : AppCompatActivity() {
                     val indices = seleccionadas.toList().sortedDescending()
 
                     for (i in indices) {
-                        FilmDataSource.films.removeAt(i)
+                        FilmDataSource.removeAt(i)
                     }
 
                     // Actualización del listado después del borrado.

@@ -36,18 +36,29 @@ object FilmDataSource {
         )
     )
 
+    // Listener para avisar a la pantalla del listado cuando cambien las películas.
+    var onFilmsChanged: (() -> Unit)? = null
+
+    private fun notifyFilmsChanged() {
+        // Aviso de cambio en el listado de películas.
+        onFilmsChanged?.invoke()
+    }
+
     fun add(film: Film) {
         films.add(film)
+        notifyFilmsChanged()
     }
 
     fun removeAt(index: Int) {
         if (index in films.indices) {
             films.removeAt(index)
+            notifyFilmsChanged()
         }
     }
 
     fun clearAll() {
         films.clear()
+        notifyFilmsChanged()
     }
 
     fun addOrUpdateFilm(film: Film): String {
@@ -59,10 +70,12 @@ object FilmDataSource {
         return if (index >= 0) {
             // Actualización de la película existente.
             films[index] = film
+            notifyFilmsChanged()
             "Película actualizada: ${film.title}"
         } else {
             // Alta de una nueva película.
             films.add(film)
+            notifyFilmsChanged()
             "Película añadida: ${film.title}"
         }
     }
@@ -76,6 +89,7 @@ object FilmDataSource {
         return if (index >= 0) {
             // Eliminación de la película existente.
             films.removeAt(index)
+            notifyFilmsChanged()
             "Película eliminada: $title"
         } else {
             // Resultado sin cambios cuando la película no existe.
