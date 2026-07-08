@@ -2,7 +2,7 @@ package es.ua.eps.filmoteca
 
 object FilmDataSource {
 
-    // Lista mutable de películas (SE MUTA, NO SE REASIGNA)
+    // Lista mutable de películas.
     val films: MutableList<Film> = mutableListOf(
         Film(
             title = "The Matrix",
@@ -11,7 +11,7 @@ object FilmDataSource {
             genre = "Sci-Fi",
             format = "Blu-ray",
             imdbUrl = "https://www.imdb.com/title/tt0133093/",
-            posterRes = R.drawable.ic_launcher_foreground, // pon tu drawable/placeholder
+            posterRes = R.drawable.ic_launcher_foreground,
             notes = "Clásico de ciencia ficción"
         ),
         Film(
@@ -36,16 +36,95 @@ object FilmDataSource {
         )
     )
 
-    // Utilidades (por si las necesitas)
     fun add(film: Film) {
         films.add(film)
     }
 
     fun removeAt(index: Int) {
-        if (index in films.indices) films.removeAt(index)
+        if (index in films.indices) {
+            films.removeAt(index)
+        }
     }
 
     fun clearAll() {
-        films.clear() // OJO: esto muta la lista; no reasigna 'films'
+        films.clear()
+    }
+
+    fun addOrUpdateFilm(film: Film): String {
+        // Búsqueda de una película con el mismo título.
+        val index = films.indexOfFirst {
+            it.title.equals(film.title, ignoreCase = true)
+        }
+
+        return if (index >= 0) {
+            // Actualización de la película existente.
+            films[index] = film
+            "Película actualizada: ${film.title}"
+        } else {
+            // Alta de una nueva película.
+            films.add(film)
+            "Película añadida: ${film.title}"
+        }
+    }
+
+    fun deleteFilmByTitle(title: String): String {
+        // Búsqueda de una película con el mismo título.
+        val index = films.indexOfFirst {
+            it.title.equals(title, ignoreCase = true)
+        }
+
+        return if (index >= 0) {
+            // Eliminación de la película existente.
+            films.removeAt(index)
+            "Película eliminada: $title"
+        } else {
+            // Resultado sin cambios cuando la película no existe.
+            "Película no encontrada: $title"
+        }
+    }
+
+    fun processRemoteData(data: Map<String, String>): String {
+        // Lectura de la operación recibida en el mensaje FCM.
+        val operation = data["operacion"]
+            ?: data["operation"]
+            ?: data["tipo"]
+            ?: ""
+
+        // Lectura del título de la película.
+        val title = data["title"]
+            ?: data["titulo"]
+            ?: ""
+
+        if (title.isBlank()) {
+            return "Mensaje FCM sin título de película"
+        }
+
+        return when (operation.lowercase()) {
+            "alta", "add" -> {
+                // Creación de la película a partir de los datos recibidos.
+                val film = Film(
+                    title = title,
+                    director = data["director"] ?: "Desconocido",
+                    year = data["year"]?.toIntOrNull()
+                        ?: data["anio"]?.toIntOrNull()
+                        ?: 0,
+                    genre = data["genre"] ?: data["genero"] ?: "Sin género",
+                    format = data["format"] ?: data["formato"] ?: "Digital",
+                    imdbUrl = data["imdbUrl"] ?: data["imdb"] ?: "https://www.imdb.com/",
+                    posterRes = R.drawable.ic_launcher_foreground,
+                    notes = data["notes"] ?: data["notas"] ?: ""
+                )
+
+                addOrUpdateFilm(film)
+            }
+
+            "baja", "delete", "remove" -> {
+                deleteFilmByTitle(title)
+            }
+
+            else -> {
+                "Operación FCM no reconocida: $operation"
+            }
+        }
     }
 }

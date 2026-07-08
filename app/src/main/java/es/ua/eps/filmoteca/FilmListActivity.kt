@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
+import android.util.Log
+import android.widget.Toast
+import com.google.firebase.messaging.FirebaseMessaging
 
 class FilmListActivity : AppCompatActivity() {
 
@@ -29,6 +32,8 @@ class FilmListActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        showFcmToken()
 
         if (useCompose) {
             setContent {
@@ -232,6 +237,32 @@ class FilmListActivity : AppCompatActivity() {
                 seleccionadas.clear()
             }
         })
+    }
+
+    private fun showFcmToken() {
+        // Solicitud del token actual de Firebase Cloud Messaging.
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+
+                // Comprobación de error al obtener el token.
+                if (!task.isSuccessful) {
+                    Log.w("FCM_TOKEN", "No se pudo obtener el token FCM", task.exception)
+                    return@addOnCompleteListener
+                }
+
+                // Obtención del token actual.
+                val token = task.result
+
+                // Registro del token en Logcat.
+                Log.d("FCM_TOKEN", "Token actual: $token")
+
+                // Aviso visual para confirmar que se ha solicitado el token.
+                Toast.makeText(
+                    this,
+                    "Token FCM mostrado en Logcat",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
     }
 
     private fun closeSession() {
