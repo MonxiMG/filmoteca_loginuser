@@ -12,12 +12,26 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Divider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,38 +41,38 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 class FilmDataActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_FILM_TITLE = "EXTRA_FILM_TITLE"
+        const val EXTRA_FILM_INDEX = "EXTRA_FILM_INDEX"
     }
 
-    private val useCompose = true // XML = false
+    private val useCompose = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val filmTitle = intent.getStringExtra(EXTRA_FILM_TITLE) ?: "Película desconocida"
-        val filmInfo = buildFilmInfo(filmTitle)
+        // Obtención de la película real enviada desde el listado.
+        val filmInfo = getFilmInfoFromIntent()
 
         if (useCompose) {
             setContent {
-                // App bar + contenido con flecha HOME
                 FilmDataScaffold(
                     title = filmInfo.title,
-                    onBack = { finish() }, // ← flecha vuelve al listado
+                    onBack = { finish() }
                 ) {
                     FilmDataScreenCompose(
                         info = filmInfo,
                         onOpenImdb = { openUrl(filmInfo.imdbUrl) },
-                        onEdit = { startActivity(Intent(this, FilmEditActivity::class.java)) },
+                        onEdit = {
+                            startActivity(Intent(this, FilmEditActivity::class.java))
+                        },
                         onBackToMain = {
-                            val i = Intent(this, FilmListActivity::class.java)
+                            val intent = Intent(this, FilmListActivity::class.java)
                                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            startActivity(i)
+                            startActivity(intent)
                         }
                     )
                 }
@@ -68,32 +82,60 @@ class FilmDataActivity : AppCompatActivity() {
         }
     }
 
-    private fun openUrl(url: String) {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    private fun getFilmInfoFromIntent(): FilmInfo {
+        // Lectura del índice enviado desde FilmListActivity.
+        val filmIndex = intent.getIntExtra(EXTRA_FILM_INDEX, -1)
+
+        // Búsqueda de la película por índice.
+        if (filmIndex in FilmDataSource.films.indices) {
+            val film = FilmDataSource.films[filmIndex]
+            return film.toFilmInfo()
+        }
+
+        // Compatibilidad por si alguna pantalla antigua envía el título.
+        val filmTitle = intent.getStringExtra(EXTRA_FILM_TITLE)
+
+        if (!filmTitle.isNullOrBlank()) {
+            val film = FilmDataSource.films.firstOrNull {
+                it.title.equals(filmTitle, ignoreCase = true)
+            }
+
+            if (film != null) {
+                return film.toFilmInfo()
+            }
+        }
+
+        // Película por defecto si no se recibe información válida.
+        return FilmInfo(
+            posterRes = R.drawable.ic_launcher_foreground,
+            title = "Película desconocida",
+            director = "Desconocido",
+            year = "Sin año",
+            genre = "Sin género",
+            format = "Sin formato",
+            imdbUrl = "https://www.imdb.com/",
+            notes = ""
+        )
     }
 
-    private fun buildFilmInfo(title: String): FilmInfo {
-        return if (title.contains("A", ignoreCase = true)) {
-            FilmInfo(
-                posterRes = R.drawable.pelicula_a,
-                title = title,
-                director = "Rio",
-                year = "2022",
-                genre = "Drama",
-                format = "Blu-ray",
-                imdbUrl = "https://www.imdb.com/title/tt1234567/"
-            )
-        } else {
-            FilmInfo(
-                posterRes = R.drawable.pelicula_b,
-                title = title,
-                director = "La Monja",
-                year = "2021",
-                genre = "Terror",
-                format = "Online",
-                imdbUrl = "https://www.imdb.com/title/tt7654321/"
-            )
-        }
+    private fun Film.toFilmInfo(): FilmInfo {
+        // Conversión del modelo Film al modelo visual FilmInfo.
+        return FilmInfo(
+            posterRes = posterRes,
+            title = title,
+            director = director,
+            year = year.toString(),
+            genre = genre,
+            format = format,
+            imdbUrl = imdbUrl,
+            notes = notes
+        )
+    }
+
+    private fun openUrl(url: String) {
+        // Apertura de la URL de IMDb en el navegador.
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        startActivity(intent)
     }
 }
 
@@ -104,10 +146,11 @@ data class FilmInfo(
     val year: String,
     val genre: String,
     val format: String,
-    val imdbUrl: String
+    val imdbUrl: String,
+    val notes: String
 )
 
-/* ---------------- Scaffold con App Bar (flecha HOME) ---------------- */
+/* ---------------- Scaffold con App Bar ---------------- */
 
 @Composable
 private fun FilmDataScaffold(
@@ -118,7 +161,13 @@ private fun FilmDataScaffold(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(text = title, fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Text(
+                        text = title,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -131,13 +180,17 @@ private fun FilmDataScaffold(
             )
         }
     ) { innerPadding ->
-        Box(Modifier.padding(innerPadding)) {
+        Box(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
             content()
         }
     }
 }
 
-/* ---------------- Pantalla Compose (contenido) ---------------- */
+/* ---------------- Pantalla Compose ---------------- */
 
 @Composable
 fun FilmDataScreenCompose(
@@ -146,48 +199,67 @@ fun FilmDataScreenCompose(
     onEdit: () -> Unit,
     onBackToMain: () -> Unit
 ) {
-    val blackYellow = ButtonDefaults.buttonColors(
+    val buttonColors = ButtonDefaults.buttonColors(
         containerColor = Color.Black,
         contentColor = Color.Yellow
     )
 
-    var notes by rememberSaveable { mutableStateOf("") }
+    var notes by rememberSaveable { mutableStateOf(info.notes) }
     val scroll = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(scroll),
+            .verticalScroll(scroll)
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Cartel
+        // Cartel de la película.
         Image(
             painter = painterResource(id = info.posterRes),
-            contentDescription = stringResource(R.string.about_image_cd),
+            contentDescription = "Cartel de ${info.title}",
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp)
+                .height(220.dp)
                 .clip(RoundedCornerShape(12.dp)),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Fit
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Título (ya sale en AppBar, pero lo dejamos también si quieres)
-        Text(text = info.title, style = MaterialTheme.typography.titleLarge)
+        // Título de la película.
+        Text(
+            text = info.title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Ficha técnica
-        LabeledValue(label = "Director", value = info.director)
-        LabeledValue(label = "Año", value = info.year)
-        LabeledValue(label = "Género", value = info.genre)
-        LabeledValue(label = "Formato", value = info.format)
+        // Tarjeta de datos.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                LabeledValue(label = "Director", value = info.director)
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-        Spacer(Modifier.height(16.dp))
+                LabeledValue(label = "Año", value = info.year)
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-        // Notas del usuario
+                LabeledValue(label = "Género", value = info.genre)
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                LabeledValue(label = "Formato", value = info.format)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Notas de la película.
         OutlinedTextField(
             value = notes,
             onValueChange = { notes = it },
@@ -196,43 +268,59 @@ fun FilmDataScreenCompose(
             minLines = 3
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // Botones (negro/amarillo)
+        // Botón IMDb.
         Button(
             onClick = onOpenImdb,
-            colors = blackYellow,
+            colors = buttonColors,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
-        ) { Text(text = stringResource(R.string.action_imdb)) }
+        ) {
+            Text(text = stringResource(R.string.action_imdb))
+        }
 
+        // Botón editar.
         Button(
             onClick = onEdit,
-            colors = blackYellow,
+            colors = buttonColors,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
-        ) { Text(text = stringResource(R.string.action_edit)) }
+        ) {
+            Text(text = stringResource(R.string.action_edit))
+        }
 
+        // Botón volver.
         Button(
             onClick = onBackToMain,
-            colors = blackYellow,
+            colors = buttonColors,
             modifier = Modifier.fillMaxWidth()
-        ) { Text(text = stringResource(R.string.action_back_to_main)) }
+        ) {
+            Text(text = stringResource(R.string.action_back_to_main))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 @Composable
 private fun LabeledValue(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+    Column(
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Text(text = "$label:")
-        Spacer(Modifier.width(8.dp))
-        Text(text = value)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge
+        )
     }
 }
